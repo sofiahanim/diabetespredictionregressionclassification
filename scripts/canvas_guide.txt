@@ -1,0 +1,167 @@
+library(dplyr)
+library(readr)
+library(gridExtra)
+library(grid)
+library(caret)
+library(e1071)
+library(randomForest)
+library(xgboost)
+library(ROCR)
+library(naivebayes)
+
+# Set locale to handle UTF-8 encoding properly
+Sys.setlocale("LC_CTYPE", "en_US.UTF-8")
+
+# Directories
+main_dir <- "./"
+data_dir <- file.path(main_dir, "data")
+processed_data_dir <- file.path(data_dir, "processed")
+results_dir <- file.path(data_dir, "results")
+models_dir <- file.path(main_dir, "outputs/models")
+raw_data_path <- file.path(data_dir, "raw/diabetes.csv")
+preprocessed_data_path <- file.path(processed_data_dir, "preprocessed_data.csv")
+classification_results_path <- file.path(results_dir, "classification_results.csv")
+regression_results_path <- file.path(results_dir, "regression_results.csv")
+
+# Ensure directories exist
+if (!dir.exists(processed_data_dir)) {
+  dir.create(processed_data_dir, recursive = TRUE)
+}
+if (!dir.exists(results_dir)) {
+  dir.create(results_dir, recursive = TRUE)
+}
+if (!dir.exists(models_dir)) {
+  dir.create(models_dir, recursive = TRUE)
+}
+
+# Load raw data
+data <- read_csv(raw_data_path)
+
+# Preprocessing
+zero_replace_cols <- c("Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI")
+data <- data %>%
+  mutate(across(all_of(zero_replace_cols), ~ifelse(. == 0, NA, .))) %>%
+  mutate(across(where(is.numeric), ~ifelse(is.na(.), median(., na.rm = TRUE), .))) %>%
+  mutate(
+    DiabetesPedigreeFunction = as.numeric(DiabetesPedigreeFunction),
+    Outcome = as.factor(Outcome),
+    AgeGroup = case_when(
+      Age < 30 ~ "Under 30",
+      Age >= 30 & Age < 50 ~ "30-49",
+      Age >= 50 ~ "50 and above"
+    )
+  )
+write_csv(data, preprocessed_data_path)
+
+# Prepare datasets
+set.seed(123)
+data_balanced <- data
+smote_data <- SMOTE(Outcome ~ ., data = data, perc.over = 100, perc.under = 200)
+augmented_data <- smote_data  # Placeholder for augmentation
+
+datasets <- list(
+  "Raw Data" = data,
+  "Oversampled Data" = data_balanced,
+  "Oversampled + SMOTE Data" = smote_data,
+  "Full Workflow (Augmented)" = augmented_data
+)
+
+# Classification Workflow
+evaluate_classification <- function(dataset_name, dataset) {
+  set.seed(123)
+  train_index <- createDataPartition(dataset$Outcome, p = 0.8, list = FALSE)
+  train_data <- dataset[train_index, ]
+  test_data <- dataset[-train_index, ]
+
+  models <- list(
+    "Logistic Regression" = train(Outcome ~ ., data = train_data, method = "glm", family = "binomial"),
+    "SVM" = train(Outcome ~ ., data = train_data, method = "svmRadial"),
+    "Naive Bayes" = naiveBayes(Outcome ~ ., data = train_data),
+    "XGBoost" = train(Outcome ~ ., data = train_data, method = "xgbTree")
+  )
+
+  results <- data.frame(
+    Dataset = dataset_name,
+    Model = character(),
+    Accuracy = numeric(),
+    Precision = numeric(),
+    Recall = numeric(),
+    F1_Score = numeric(),
+    AUC_ROC = numeric()
+  )
+
+  for (model_name in names(models)) {
+    model <- models[[model_name]]
+    predictions <- predict(model, test_data)
+    prob_predictions <- predict(model, test_data, type = "prob")
+
+    confusion <- confusionMatrix(predictions, test_data$Outcome)
+    pred <- prediction(prob_predictions[, 2], test_data$Outcome)
+    perf <- performance(pred, "tpr", "fpr")
+    auc <- performance(pred, "auc")@y.values[[1]]
+
+    results <- rbind(results, data.frame(
+      Dataset = dataset_name,
+      Model = model_name,
+      Accuracy = confusion$overall["Accuracy"],
+      Precision = confusion$byClass["Pos Pred Value"],
+      Recall = confusion$byClass["Sensitivity"],
+      F1_Score = 2 * (confusion$byClass["Pos Pred Value"] * confusion$byClass["Sensitivity"]) / 
+        (confusion$byClass["Pos Pred Value"] + confusion$byClass["Sensitivity"]),
+      AUC_ROC = auc
+    ))
+  }
+  return(results)
+}
+
+# Regression Workflow
+evaluate_regression <- function(dataset_name, dataset) {
+  set.seed(123)
+  train_index <- createDataPartition(dataset$BMI, p = 0.8, list = FALSE)
+  train_data <- dataset[train_index, ]
+  test_data <- dataset[-train_index, ]
+
+  models <- list(
+    "Linear Regression" = train(BMI ~ ., data = train_data, method = "lm"),
+    "Random Forest Regressor" = train(BMI ~ ., data = train_data, method = "rf"),
+    "XGBoost Regressor" = train(BMI ~ ., data = train_data, method = "xgbLinear")
+  )
+
+  results <- data.frame(
+    Dataset = dataset_name,
+    Model = character(),
+    MAE = numeric(),
+    MSE = numeric(),
+    R2 = numeric()
+  )
+
+  for (model_name in names(models)) {
+    model <- models[[model_name]]
+    predictions <- predict(model, test_data)
+
+    results <- rbind(results, data.frame(
+      Dataset = dataset_name,
+      Model = model_name,
+      MAE = mean(abs(predictions - test_data$BMI)),
+      MSE = mean((predictions - test_data$BMI)^2),
+      R2 = cor(predictions, test_data$BMI)^2
+    ))
+  }
+  return(results)
+}
+
+# Collect results
+classification_results <- do.call(rbind, lapply(names(datasets), function(name) {
+  evaluate_classification(name, datasets[[name]])
+}))
+regression_results <- do.call(rbind, lapply(names(datasets), function(name) {
+  evaluate_regression(name, datasets[[name]])
+}))
+
+# Save results
+write_csv(classification_results, classification_results_path)
+write_csv(regression_results, regression_results_path)
+
+cat("Evaluation completed. Results saved to:\n")
+cat("- Classification Results:", classification_results_path, "\n")
+cat("- Regression Results:", regression_results_path, "\n")

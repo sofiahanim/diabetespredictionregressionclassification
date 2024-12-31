@@ -1,0 +1,48 @@
+Data Cleaning Process
+----------------------
+
+#1: Initial Dataset Glimpse:
+Rows: 768
+Columns: 9
+$ Pregnancies              <dbl> 6, 1, 8, 1, 0, 5, 3, 10, 2, 8, 4, 10, 10, 1, …
+$ Glucose                  <dbl> 148, 85, 183, 89, 137, 116, 78, 115, 197, 125…
+$ BloodPressure            <dbl> 72, 66, 64, 66, 40, 74, 50, 0, 70, 96, 92, 74…
+$ SkinThickness            <dbl> 35, 29, 0, 23, 35, 0, 32, 0, 45, 0, 0, 0, 0, …
+$ Insulin                  <dbl> 0, 0, 0, 94, 168, 0, 88, 0, 543, 0, 0, 0, 0, …
+$ BMI                      <dbl> 33.6, 26.6, 23.3, 28.1, 43.1, 25.6, 31.0, 35.…
+$ DiabetesPedigreeFunction <dbl> 0.627, 0.351, 0.672, 0.167, 2.288, 0.201, 0.2…
+$ Age                      <dbl> 50, 31, 32, 21, 33, 30, 26, 29, 53, 54, 30, 3…
+$ Outcome                  <dbl> 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, …
+# A tibble: 768 × 9
+   Pregnancies Glucose BloodPressure SkinThickness Insulin   BMI
+         <dbl>   <dbl>         <dbl>         <dbl>   <dbl> <dbl>
+ 1           6     148            72            35       0  33.6
+ 2           1      85            66            29       0  26.6
+ 3           8     183            64             0       0  23.3
+ 4           1      89            66            23      94  28.1
+ 5           0     137            40            35     168  43.1
+ 6           5     116            74             0       0  25.6
+ 7           3      78            50            32      88  31  
+ 8          10     115             0             0       0  35.3
+ 9           2     197            70            45     543  30.5
+10           8     125            96             0       0   0  
+# ℹ 758 more rows
+# ℹ 3 more variables: DiabetesPedigreeFunction <dbl>, Age <dbl>, Outcome <dbl>
+# ℹ Use `print(n = ...)` to see more rows
+
+#2: Replacing implausible zero values with NA for specific columns.
+Columns with zeros replaced:  Glucose, BloodPressure, SkinThickness, Insulin, BMI 
+
+#3: Applying median imputation for missing values.
+Imputation completed for numeric columns.
+
+#4: Converting incorrect data types.
+Columns converted: DiabetesPedigreeFunction (to numeric), Outcome (to factor).
+
+#5: Categorizing 'Age' into age groups.
+Age categorized into groups: 'Under 30', '30-49', '50 and above'.
+
+#6: Labeling Outcome as Non-Diabetic (0) and Diabetic (1).
+Outcome labels updated: 0 -> Non-Diabetic, 1 -> Diabetic.
+
+#7: Cleaned dataset saved to  .//data/processed/cleaned_data.csv 
